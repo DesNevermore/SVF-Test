@@ -37,17 +37,18 @@ static Option<std::string> NEWSPECPATH("newspec",
 void traverseOnSVFStmt(const ICFGNode* node)
 {
     auto str = SOURCEPATH();
+    auto modification = new SVF::Modification(str);
     auto lightAnalysis = new LightAnalysis(str);
     // std::string stmtstring = node->toString();
     if (const CallICFGNode* callNode = SVFUtil::dyn_cast<CallICFGNode>(node))
-    { 
+    {
         const SVFInstruction* cs = callNode->getCallSite();
         std::string m = cs->getSourceLoc();
         std::string inststring = cs->toString();
-        std ::cout << inststring << std::endl;  
+        std ::cout << inststring << std::endl;
         if (m == "")
         {
-            return  ;
+            return;
         }
         std::string::size_type pos = m.find("\"ln\":");
         unsigned int num = std::stoi(m.substr(pos + 5, m.find(",") - pos - 5));
@@ -81,7 +82,18 @@ void traverseOnSVFStmt(const ICFGNode* node)
                                       srcpath);
     }
     for (const SVFStmt* stmt : node->getSVFStmts())
-    { 
+    {
+        const SVFValue* instruction = stmt->getValue();
+        bool a = modification->queryIfFirstDefinition(instruction);
+
+        if (a == true)
+        {
+            std::string inststring = instruction->toString();
+            std ::cout << inststring << std::endl;
+        }
+
+        //   std::string name = instruction->getName();
+        //   std::cout << name << std::endl;
         if (const BranchStmt* branch = SVFUtil::dyn_cast<BranchStmt>(stmt))
         {
             std::string brstring = branch->getValue()->toString();
@@ -151,6 +163,8 @@ int main(int argc, char** argv)
         const ICFGNode* node = it.second;
         traverseOnSVFStmt(node);
     }
-
+    // auto str = SOURCEPATH();
+    // auto modification = new SVF::Modification(str);
+    // modification->setHoleFilling(1, "a");
     return 0;
 }
