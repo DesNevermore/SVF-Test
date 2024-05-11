@@ -79,13 +79,15 @@ void LightAnalysis::runOnSrc()
 struct VisitorData
 {
     int order_number;
-    unsigned int target_line;
+    int target_line;
     int visit_time;
     std::string functionName;
     std::vector<std::string> parameters;
+    std::vector<int> lines;
+    std::vector<int> columns;
 };
 
-void LightAnalysis::findNodeOnTree(unsigned int target_line, int order_number,
+void LightAnalysis::findNodeOnTree(int target_line, int order_number,
                                    const std::string& functionName,
                                    const std::vector<std::string>& parameters,
                                    std::string srcpathstring)
@@ -123,11 +125,11 @@ enum CXChildVisitResult LightAnalysis::astVisitor(CXCursor curCursor,
                                                   CXClientData client_data)
 {
     CXSourceLocation loc = clang_getCursorLocation(curCursor);
-    unsigned int line, column;
+    int line, column;
     CXFile file;
     clang_getSpellingLocation(loc, &file, &line, &column, nullptr);
     VisitorData* data = static_cast<VisitorData*>(client_data);
-    unsigned int target_line = data->target_line;
+    int target_line = data->target_line;
     if (line == target_line)
     {
 
@@ -173,9 +175,8 @@ enum CXChildVisitResult LightAnalysis::astVisitor(CXCursor curCursor,
                                  "function name.\n";
 
                     int params_size = params_type.size();
-                    VisitorData data{params_size,
-                                     static_cast<unsigned int>(params_size), 0,
-                                     "", params_type};
+                    VisitorData data{params_size, static_cast<int>(params_size),
+                                     0, "", params_type};
                     clang_visitChildren(curCursor, &callVisitor, &data);
                     CXSourceRange callRange = clang_getCursorExtent(curCursor);
                     printSourceRange(callRange, functionName);
@@ -219,7 +220,7 @@ enum CXChildVisitResult LightAnalysis::astVisitor(CXCursor curCursor,
             else if (static_cast<CXCursorKind>(
                          clang_getCursorKind(curCursor)) == CXCursor_ForStmt)
             {
-                unsigned int childCount = 0;
+                int childCount = 0;
                 clang_visitChildren(curCursor, &countChildren, &childCount);
                 VisitorData data{0, childCount, 0, operation, {}};
                 clang_visitChildren(curCursor, &forstmtVisitor, &data);
@@ -259,7 +260,7 @@ enum CXChildVisitResult LightAnalysis::forstmtVisitor(CXCursor cursor,
                                                       CXClientData clientData)
 {
     VisitorData* data = static_cast<VisitorData*>(clientData);
-    unsigned int childnum = data->target_line;
+    int childnum = data->target_line;
     if (childnum == 4)
     {
         data->order_number = data->order_number + 1;
@@ -273,7 +274,7 @@ enum CXChildVisitResult LightAnalysis::forstmtVisitor(CXCursor cursor,
                 CXSourceRange binaryrange = clang_getCursorExtent(cursor);
                 printSourceRange(binaryrange, "binaryoperation");
                 CXToken* tokens = 0;
-                unsigned int numTokens = 0;
+                int numTokens = 0;
                 CXSourceRange range = clang_getCursorExtent(cursor);
                 CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
                 clang_tokenize(TU, range, &tokens, &numTokens);
@@ -318,7 +319,7 @@ enum CXChildVisitResult LightAnalysis::forstmtVisitor(CXCursor cursor,
             {
                 CXSourceRange range = clang_getCursorExtent(cursor);
                 CXToken* tokens = 0;
-                unsigned int numTokens = 0;
+                int numTokens = 0;
                 CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
                 clang_tokenize(TU, range, &tokens, &numTokens);
                 int flag = 0;
@@ -362,7 +363,7 @@ enum CXChildVisitResult LightAnalysis::whilestmtVisitor(CXCursor cursor,
             CXSourceRange binaryrange = clang_getCursorExtent(cursor);
             printSourceRange(binaryrange, "binaryoperation");
             CXToken* tokens = 0;
-            unsigned int numTokens = 0;
+            int numTokens = 0;
             CXSourceRange range = clang_getCursorExtent(cursor);
             CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
             clang_tokenize(TU, range, &tokens, &numTokens);
@@ -407,7 +408,7 @@ enum CXChildVisitResult LightAnalysis::whilestmtVisitor(CXCursor cursor,
         {
             CXSourceRange range = clang_getCursorExtent(cursor);
             CXToken* tokens = 0;
-            unsigned int numTokens = 0;
+            int numTokens = 0;
             CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
             clang_tokenize(TU, range, &tokens, &numTokens);
             int flag = 0;
@@ -451,7 +452,7 @@ enum CXChildVisitResult LightAnalysis::ifstmtVisitor(CXCursor cursor,
             CXSourceRange binaryrange = clang_getCursorExtent(cursor);
             printSourceRange(binaryrange, "binaryoperation");
             CXToken* tokens = 0;
-            unsigned int numTokens = 0;
+            int numTokens = 0;
             CXSourceRange range = clang_getCursorExtent(cursor);
             CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
             clang_tokenize(TU, range, &tokens, &numTokens);
@@ -484,7 +485,7 @@ enum CXChildVisitResult LightAnalysis::ifstmtVisitor(CXCursor cursor,
         {
             CXSourceRange range = clang_getCursorExtent(cursor);
             CXToken* tokens = 0;
-            unsigned int numTokens = 0;
+            int numTokens = 0;
             CXTranslationUnit TU = clang_Cursor_getTranslationUnit(cursor);
             clang_tokenize(TU, range, &tokens, &numTokens);
             int flag = 0;
@@ -627,17 +628,53 @@ enum CXChildVisitResult LightAnalysis::findIfElseScope(CXCursor cursor,
                                                        CXCursor parent,
                                                        CXClientData clientData)
 {
-    unsigned int* count = (unsigned int*)clientData;
-    (*count)++;
-    if (*count == 2)
+    //  int* count = (int*)clientData;
+    //  (*count)++;
+    VisitorData* data = static_cast<VisitorData*>(clientData);
+    data->order_number++;
+    int count = data->order_number;
+
+    if (count == 1)
+    {
+        CXSourceRange ifcondrange = clang_getCursorExtent(cursor);
+        CXSourceLocation startLoc = clang_getRangeStart(ifcondrange);
+        CXSourceLocation endLoc = clang_getRangeEnd(ifcondrange);
+        unsigned startLine, startColumn, endLine, endColumn;
+        clang_getSpellingLocation(startLoc, NULL, &startLine, &startColumn,
+                                  NULL);
+        clang_getSpellingLocation(endLoc, NULL, &endLine, &endColumn, NULL);
+        data->parameters.push_back(std::to_string(startLine));
+        data->parameters.push_back(std::to_string(startColumn));
+        data->parameters.push_back(std::to_string(endLine));
+        data->parameters.push_back(std::to_string(endColumn));
+    }
+    if (count == 2)
     {
         CXSourceRange ifrange = clang_getCursorExtent(cursor);
-        printSourceRange(ifrange, "if");
+        CXSourceLocation startLoc = clang_getRangeStart(ifrange);
+        CXSourceLocation endLoc = clang_getRangeEnd(ifrange);
+        unsigned startLine, startColumn, endLine, endColumn;
+        clang_getSpellingLocation(startLoc, NULL, &startLine, &startColumn,
+                                  NULL);
+        clang_getSpellingLocation(endLoc, NULL, &endLine, &endColumn, NULL);
+        data->parameters.push_back(std::to_string(startLine));
+        data->parameters.push_back(std::to_string(startColumn));
+        data->parameters.push_back(std::to_string(endLine));
+        data->parameters.push_back(std::to_string(endColumn));
     }
-    if (*count == 3)
+    if (count == 3)
     {
         CXSourceRange elseRange = clang_getCursorExtent(cursor);
-        printSourceRange(elseRange, "else");
+        CXSourceLocation startLoc = clang_getRangeStart(elseRange);
+        CXSourceLocation endLoc = clang_getRangeEnd(elseRange);
+        unsigned startLine, startColumn, endLine, endColumn;
+        clang_getSpellingLocation(startLoc, NULL, &startLine, &startColumn,
+                                  NULL);
+        clang_getSpellingLocation(endLoc, NULL, &endLine, &endColumn, NULL);
+        data->parameters.push_back(std::to_string(startLine));
+        data->parameters.push_back(std::to_string(startColumn));
+        data->parameters.push_back(std::to_string(endLine));
+        data->parameters.push_back(std::to_string(endColumn));
     }
     return CXChildVisit_Continue;
 }
@@ -660,17 +697,17 @@ enum CXChildVisitResult LightAnalysis::defineVisitor(CXCursor curCursor,
                                                      CXClientData client_data)
 {
     CXSourceLocation loc = clang_getCursorLocation(curCursor);
-    unsigned int line, column;
+    int line, column;
     CXFile file;
     clang_getSpellingLocation(loc, &file, &line, &column, nullptr);
     VisitorData* data = static_cast<VisitorData*>(client_data);
-    unsigned int target_line = data->target_line;
+    int target_line = data->target_line;
     if (line == target_line)
     {
         if (clang_getCursorKind(curCursor) == CXCursor_VarDecl)
         {
             CXString var_name = clang_getCursorSpelling(curCursor);
-            unsigned int childCount = 0;
+            int childCount = 0;
             clang_visitChildren(curCursor, &countChildren, &childCount);
             if (childCount > 0)
             {
@@ -694,7 +731,7 @@ enum CXChildVisitResult LightAnalysis::cursorVisitor(CXCursor curCursor,
     // Print the char* value of current_display_name
     // 获取源代码中的位置
     CXSourceLocation loc = clang_getCursorLocation(curCursor);
-    unsigned int line, column;
+    int line, column;
     CXFile file;
     clang_getSpellingLocation(loc, &file, &line, &column, nullptr);
     // 将位置转换为行号、列号和文件名
@@ -715,7 +752,7 @@ enum CXChildVisitResult LightAnalysis::countChildren(CXCursor cursor,
     {
         return CXChildVisit_Continue;
     }
-    unsigned int* count = (unsigned int*)clientData;
+    int* count = (int*)clientData;
     (*count)++;
     return CXChildVisit_Continue;
 }
@@ -734,7 +771,7 @@ bool Modification::queryIfFirstDefinition(const SVFValue* defInst)
         // printf("location is empty\n");
         return false;
     }
-    unsigned int target_line =
+    int target_line =
         std::stoi(location.substr(pos + 5, location.find(",") - pos - 5));
 
     int flag = 0;
@@ -1060,11 +1097,277 @@ void Modification::replace(const SVFValue* inst, std::string str)
         os << line << "\n";
     }
     context.workText = os.str();
-
     // 注意：在替换操作中，我们不需要修改lineOffsetMap，因为行数没有变化
+    // Store the updated context back in the fileContextMap
+    fileContextMap[srcFilePath + srcpathstring] = context;
+}
+
+enum CXChildVisitResult LightAnalysis::branchVisitor(CXCursor curCursor,
+                                                     CXCursor parent,
+                                                     CXClientData client_data)
+{
+    CXSourceLocation loc = clang_getCursorLocation(curCursor);
+    int line, column;
+    CXFile file;
+    clang_getSpellingLocation(loc, &file, &line, &column, nullptr);
+    VisitorData* data = static_cast<VisitorData*>(client_data);
+
+    int target_line = data->target_line;
+    if (line == target_line)
+    {
+        if (static_cast<CXCursorKind>(clang_getCursorKind(curCursor)) ==
+            CXCursor_IfStmt)
+        {
+            int childnum = 0;
+            // childnum是3说明有else
+            // 如果childnum是3，parent的location是整体范围，child1的location是if后面括号的范围，child2的location是if后面的{}的范围，child3的location是else后面的{}的范围
+            // 如果childnum是2，parent的location是整体范围，child1的location是if后面括号的范围，child2的location是if后面的{}的范围
+            std::vector<std::string> params;
+            VisitorData data2{0, 0, 0, "", params};
+            clang_visitChildren(curCursor, &findIfElseScope, &data2);
+            CXSourceRange wholeifrange = clang_getCursorExtent(curCursor);
+            CXSourceLocation startLoc = clang_getRangeStart(wholeifrange);
+            CXSourceLocation endLoc = clang_getRangeEnd(wholeifrange);
+            unsigned startLine, startColumn, endLine, endColumn;
+            clang_getSpellingLocation(startLoc, NULL, &startLine, &startColumn,
+                                      NULL);
+            clang_getSpellingLocation(endLoc, NULL, &endLine, &endColumn, NULL);
+
+            int childnum = data2.order_number;
+            data->order_number = childnum;
+            data->lines.push_back(startLine);
+            data->columns.push_back(startColumn);
+            data->lines.push_back(endLine);
+            data->columns.push_back(endColumn);
+
+            if (childnum == 3)
+            {
+                for (int i = 0; i < 12; i++)
+                {
+                    data->lines.push_back(std::stoi(data2.parameters[i]));
+                    data->columns.push_back(std::stoi(data2.parameters[i + 1]));
+                }
+            }
+            else if (childnum == 2)
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    data->lines.push_back(std::stoi(data2.parameters[i]));
+                    data->columns.push_back(std::stoi(data2.parameters[i + 1]));
+                }
+            }
+        }
+    }
+    return CXChildVisit_Recurse;
+}
+
+void Modification::deleteCodeRange(int startLine, int startColumn, int endLine,
+                                   int endColumn, std::string srcpathstring)
+{
+    // Assuming we have access to fileContextMap and srcFilePath similar to the
+    // reference functions Assuming srcpathstring can be obtained in a similar
+    // manner as the reference functions
+
+    ReadWriteContext& context = fileContextMap[srcFilePath + srcpathstring];
+
+    // Adjust the start and end line numbers based on lineOffsetMap
+    int adjusted_start_line = startLine;
+    int adjusted_end_line = endLine;
+    for (const auto& offset_pair : context.lineOffsetMap)
+    {
+        if (offset_pair.first <= startLine)
+        {
+            adjusted_start_line += offset_pair.second;
+        }
+        if (offset_pair.first < endLine)
+        {
+            adjusted_end_line += offset_pair.second;
+        }
+    }
+
+    std::stringstream ss(context.workText);
+    std::string line;
+    std::vector<std::string> lines;
+    while (std::getline(ss, line))
+    {
+        lines.push_back(line);
+    }
+
+    // Check if the range is valid
+    if (adjusted_start_line <= adjusted_end_line &&
+        adjusted_start_line <= lines.size() &&
+        adjusted_end_line <= lines.size())
+    {
+        // Delete the specified range of text
+        for (int i = adjusted_start_line; i <= adjusted_end_line; ++i)
+        {
+            if (i == adjusted_start_line && startColumn > 1)
+            {
+                // If not deleting from the beginning of the line, preserve text
+                // before startColumn
+                lines[i - 1] = lines[i - 1].substr(0, startColumn - 1);
+            }
+            else if (i == adjusted_end_line &&
+                     endColumn < lines[i - 1].length())
+            {
+                // If not deleting to the end of the line, preserve text after
+                // endColumn
+                lines[i - 1] = lines[i - 1].substr(endColumn);
+            }
+            else
+            {
+                // Delete the entire line
+                lines[i - 1].clear();
+            }
+        }
+
+        // Remove any empty lines resulting from the deletion
+        lines.erase(std::remove(lines.begin(), lines.end(), ""), lines.end());
+    }
+
+    // 重新整合workText
+    std::ostringstream os;
+    for (const auto& line : lines)
+    {
+        os << line << "\n";
+    }
+    context.workText = os.str();
+
+    // Update the lineOffsetMap to reflect the deletion of lines
+    std::map<int, int> newOffsetMap;
+    int lineOffsetChange = 0;
+    for (const auto& offset_pair : context.lineOffsetMap)
+    {
+        if (offset_pair.first < adjusted_start_line)
+        {
+            newOffsetMap[offset_pair.first] = offset_pair.second;
+        }
+        else if (offset_pair.first <= adjusted_end_line)
+        {
+            // Lines within the deletion range are not added to the new map
+            lineOffsetChange -= 1;
+        }
+        else
+        {
+            // Lines after the deletion range need to have their offsets
+            // adjusted
+            newOffsetMap[offset_pair.first + lineOffsetChange] =
+                offset_pair.second;
+        }
+    }
+
+    // Replace the old map with the new map
+    context.lineOffsetMap = std::move(newOffsetMap);
 
     // Store the updated context back in the fileContextMap
     fileContextMap[srcFilePath + srcpathstring] = context;
+}
+
+void Modification::deleteEitherBranch(const SVFValue* branchInst,
+                                      bool condValue)
+{
+    std::string location = branchInst->getSourceLoc();
+    if (location == "")
+    {
+        return;
+    }
+    std::string::size_type pos = location.find("\"ln\":");
+    int target_line =
+        std::stoi(location.substr(pos + 5, location.find(",") - pos - 5));
+    pos = location.find("\"fl\": \"");
+    if (pos == std::string::npos)
+    {
+        return;
+    }
+    std::string srcpathstring =
+        location.substr(pos + 7, location.find("\" }") - pos - 7);
+    std ::cout << srcpathstring << std::endl;
+    CXIndex index = clang_createIndex(0, 0);
+    CXTranslationUnit unit = clang_parseTranslationUnit(
+        index, (srcFilePath + srcpathstring).c_str(), nullptr, 0, nullptr, 0,
+        CXTranslationUnit_None);
+    assert(unit && "unit cannot be nullptr!");
+    CXCursor cursor = clang_getTranslationUnitCursor(unit);
+    VisitorData data{0, target_line, 0, "", {}};
+    clang_visitChildren(cursor, &LightAnalysis::branchVisitor, &data);
+    int childnum = data.order_number;
+    std::vector<int> lines = data.lines;
+    std::vector<int> columns = data.columns;
+    if (childnum == 3)
+    {
+        // 有else分支
+        if (condValue)
+        {
+            // 把branch cond 加上!()，然后把
+            // if后面的{}和 else 这个词删了
+            int ifStartLine = lines[4];
+            int ifStartColumn = columns[4];
+            int ifEndLine = lines[6];
+            int ifEndColumn = columns[6];
+            deleteCodeRange(ifStartLine, ifStartColumn, ifEndLine, ifEndColumn,
+                            srcpathstring);
+        }
+        else
+        {
+            // 仅删除else分支
+            int elseStartLine = lines[6];
+            int elseStartColumn = columns[6];
+            int endLine = lines[7];
+            int endColumn = columns[7];
+            deleteCodeRange(elseStartLine, elseStartColumn, endLine, endColumn,
+                            srcpathstring);
+        }
+    }
+    else if (childnum == 2)
+    {
+        // 没有else分支
+        if (condValue)
+        {
+            int startLine = lines[0];
+            int startColumn = columns[0];
+            int endLine = lines[1];
+            int endColumn = columns[1];
+            deleteCodeRange(startLine, startColumn, endLine, endColumn,
+                            srcpathstring);
+        }
+        // 如果没有else且condValue为false，则不需要删除代码
+    }
+}
+
+void Modification::deleteBranch(const SVFValue* branchInst)
+{
+    std::string location = branchInst->getSourceLoc();
+    if (location == "")
+    {
+        return;
+    }
+    std::string::size_type pos = location.find("\"ln\":");
+    int target_line =
+        std::stoi(location.substr(pos + 5, location.find(",") - pos - 5));
+    pos = location.find("\"fl\": \"");
+    if (pos == std::string::npos)
+    {
+        return;
+    }
+    std::string srcpathstring =
+        location.substr(pos + 7, location.find("\" }") - pos - 7);
+    std ::cout << srcpathstring << std::endl;
+    CXIndex index = clang_createIndex(0, 0);
+    CXTranslationUnit unit = clang_parseTranslationUnit(
+        index, (srcFilePath + srcpathstring).c_str(), nullptr, 0, nullptr, 0,
+        CXTranslationUnit_None);
+    assert(unit && "unit cannot be nullptr!");
+    CXCursor cursor = clang_getTranslationUnitCursor(unit);
+    VisitorData data{0, target_line, 0, "", {}};
+    clang_visitChildren(cursor, &LightAnalysis::branchVisitor, &data);
+    int childnum = data.order_number;
+    std::vector<int> lines = data.lines;
+    std::vector<int> columns = data.columns;
+    int startLine = lines[0];
+    int startColumn = columns[0];
+    int endLine = lines[1];
+    int endColumn = columns[1];
+    deleteCodeRange(startLine, startColumn, endLine, endColumn, srcpathstring);
 }
 
 void Modification::setHoleFilling(int holeNumber, std::string varName)
