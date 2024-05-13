@@ -100,7 +100,8 @@ public:
 
     void deleteCodeRange(int startLine, int startColumn, int endLine,
                          int endColumn, std::string srcpathstring);
-
+    void insertNegation(int ifLine, int ifColumn, int endColumn,
+                        std::string srcpathstring);
     /// HoleFilling.
     // 可以理解为 hole 就是 "$"" + "holeNumber"，比如 $1, $2, $3,
     // ...，直接字符串精准匹配，换成 varName。
@@ -190,9 +191,13 @@ public:
     static enum CXChildVisitResult branchVisitor(CXCursor curCursor,
                                                  CXCursor parent,
                                                  CXClientData client_data);
+    static enum CXChildVisitResult LoopVisitor(CXCursor curCursor,
+                                               CXCursor parent,
+                                               CXClientData client_data);
+
     void runOnSrc();
 
-    void findNodeOnTree(unsigned int target_line, int order_number,
+    void findNodeOnTree(int target_line, int order_number,
                         const std::string& functionName,
                         const std::vector<std::string>& parameters,
                         std::string srcpathstring);
